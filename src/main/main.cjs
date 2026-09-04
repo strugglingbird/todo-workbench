@@ -16,10 +16,14 @@ const { DatabaseManager } = require('./database.cjs');
 const {
   getPeriodRange,
   buildReportMarkdown,
+  buildReportFacts,
+  mapFactsLocally,
+  mapFactsWithAi,
   polishReport,
   testAi,
   markdownToHtml,
 } = require('./reports.cjs');
+const { writeExcelReport } = require('./excel-export.cjs');
 
 let mainWindow;
 let tray;
@@ -71,11 +75,14 @@ function createWindow() {
             title: document.title,
             views: document.querySelectorAll('.view').length,
             bridgeReady: Boolean(window.workbench),
-            loadingFinished: document.querySelector('#loading-overlay').hidden
+            loadingFinished: document.querySelector('#loading-overlay').hidden,
+            excelTemplates: document.querySelectorAll('#excel-template-select option').length,
+            excelExportReady: Boolean(document.querySelector('[data-export="excel"]'))
           }), 600))
         `);
         console.log(`SMOKE_RESULT ${JSON.stringify(result)}`);
-        app.exit(result.views === 4 && result.bridgeReady && result.loadingFinished ? 0 : 1);
+        app.exit(result.views === 4 && result.bridgeReady && result.loadingFinished
+          && result.excelTemplates >= 2 && result.excelExportReady ? 0 : 1);
       } catch (error) {
         console.error('SMOKE_ERROR', error);
         app.exit(1);
@@ -173,6 +180,50 @@ async function exportReport({ markdown, title, format }) {
   return { canceled: false, filePath: result.filePath };
 }
 
+async function exportExcelReport(input) {
+  const excelConfig = configStore.getExcelConfig();
+  const template = excelConfig.templates.find((item) => item.id === input?.templateId);
+  if (!template) throw new Error('所选 Excel 模板不存在，请重新选择。');
+  const period = getPeriodRange(input?.type, input?.anchorDate);
+  const safeTitle = period.title.replace(/[\\/:*?"<>|]/g, '-');
+  const safeTemplateName = template.name.replace(/[\\/:*?"<>|]/g, '-');
+  const result = await dialog.showSaveDialog(mainWindow, {
+    title: '导出 Excel 工作汇报',
+    defaultPath: `${safeTitle}-${safeTemplateName}.xlsx`,
+    filters: [{ name: 'Excel 工作簿', extensions: ['xlsx'] }],
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  const outputPath = result.filePath.toLowerCase().endsWith('.xlsx')
+    ? result.filePath
+    : `${result.filePath}.xlsx`;
+
+  const tasks = await databaseManager.invoke('getReportData', period.startIso, period.endIso);
+  const facts = buildReportFacts(tasks, period);
+  let rows = mapFactsLocally(facts, template.headers);
+  let polished = false;
+  if (input?.useAi && facts.length) {
+    const aiConfig = configStore.getAiConfig();
+    if (!aiConfig.enabled) throw new Error('请先在设置中启用大模型润色。');
+    rows = await mapFactsWithAi(aiConfig, facts, template.headers);
+    polished = true;
+  }
+  const workbookResult = await writeExcelReport({
+    filePath: outputPath,
+    title: period.title,
+    period,
+    templateName: template.name,
+    headers: template.headers,
+    rows,
+    polished,
+  });
+  return {
+    canceled: false,
+    filePath: outputPath,
+    polished,
+    ...workbookResult,
+  };
+}
+
 function registerIpc() {
   ipcMain.handle('app:get-meta', () => ({
     version: app.getVersion(),
@@ -216,6 +267,7 @@ function registerIpc() {
     return { period, markdown, rawMarkdown, polished, taskCount: tasks.length };
   });
   ipcMain.handle('reports:export', (_event, input) => exportReport(input || {}));
+  ipcMain.handle('reports:export-excel', (_event, input) => exportExcelReport(input || {}));
 
   ipcMain.handle('settings:get', () => ({
     ...configStore.getPublic(),
@@ -234,6 +286,7 @@ function registerIpc() {
       apiKey: input?.apiKey || current.apiKey,
     });
   });
+  ipcMain.handle('settings:save-excel', (_event, input) => configStore.saveExcelConfig(input || {}));
   ipcMain.handle('settings:save', async (_event, input) => {
     const databaseConfig = configStore.buildDatabaseConfig(input?.database || {});
     await databaseManager.test(databaseConfig);

@@ -103,6 +103,11 @@
               <form id="report-form">
                 <label>汇报周期<select id="report-type"><option value="week">周报</option><option value="month">月报</option><option value="quarter">季报</option><option value="year">年报</option></select></label>
                 <label>选择周期所在日期<input id="report-anchor" type="date" required></label>
+                <div class="template-field">
+                  <span>Excel 表格模板</span>
+                  <div class="template-picker"><select id="excel-template-select" aria-label="Excel 表格模板"></select><button class="button button-ghost" id="manage-excel-template" type="button">编辑</button></div>
+                  <small>导出 Excel 时按模板表头自动匹配内容</small>
+                </div>
                 <label class="toggle-row"><span><strong>大模型润色</strong><small id="ai-hint">需先在设置中启用</small></span><input id="report-use-ai" type="checkbox"><i></i></label>
                 <button class="button button-primary button-wide" type="submit">生成汇报</button>
               </form>
@@ -115,6 +120,7 @@
                 <div class="export-actions" id="export-actions" hidden>
                   <button class="button button-ghost" data-export="md">Markdown</button>
                   <button class="button button-ghost" data-export="html">HTML</button>
+                  <button class="button button-excel" data-export="excel">Excel</button>
                   <button class="button button-dark" data-export="pdf">导出 PDF</button>
                 </div>
               </div>
@@ -205,6 +211,19 @@
 
     <dialog id="detail-dialog" class="detail-modal">
       <div id="task-detail"></div>
+    </dialog>
+
+    <dialog id="excel-template-dialog" class="modal template-modal">
+      <form id="excel-template-form" method="dialog">
+        <div class="modal-header"><div><span class="section-index">EXCEL TEMPLATE</span><h2 id="excel-template-dialog-title">编辑表格模板</h2><p>大模型会按照表头语义匹配任务事实并润色叙述内容。</p></div><button class="modal-close" type="button" data-close-dialog="excel-template-dialog">×</button></div>
+        <input id="excel-template-id" type="hidden">
+        <div class="form-grid template-form-grid">
+          <label class="field-wide">模板名称<input id="excel-template-name" type="text" maxlength="80" required placeholder="例如：部门周报明细"></label>
+          <label class="field-wide">自定义表头<textarea id="excel-template-headers" rows="10" required placeholder="每行填写一个表头，例如：&#10;任务名称&#10;本周完成内容&#10;下周工作计划&#10;需要协调事项"></textarea><small>每行或逗号分隔一个表头，最多 30 列；重复表头会自动合并。</small></label>
+          <div class="template-example field-wide"><strong>匹配说明</strong><p>常见表头可在本地自动识别。启用大模型后，也能理解“本周成果”“需协调资源”等自定义语义；没有事实依据的内容保持为空。</p></div>
+        </div>
+        <div class="modal-footer modal-footer-split"><div><button class="button button-ghost" id="new-excel-template" type="button">新建模板</button><button class="button button-danger" id="delete-excel-template" type="button">删除模板</button></div><div><button class="button button-ghost" type="button" data-close-dialog="excel-template-dialog">取消</button><button class="button button-primary" type="submit">保存模板</button></div></div>
+      </form>
     </dialog>
 
     <div class="loading-overlay" id="loading-overlay" hidden><div class="loading-mark"><span></span><span></span><span></span></div><p id="loading-message">正在处理...</p></div>

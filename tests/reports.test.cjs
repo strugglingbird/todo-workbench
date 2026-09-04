@@ -3,6 +3,8 @@ const test = require('node:test');
 const {
   getPeriodRange,
   buildReportMarkdown,
+  buildReportFacts,
+  mapFactsLocally,
   markdownToHtml,
 } = require('../src/main/reports.cjs');
 
@@ -11,6 +13,33 @@ test('weekly period starts on Monday and ends on Sunday', () => {
   assert.match(period.title, /2026\/08\/31/);
   assert.match(period.title, /2026\/09\/06/);
   assert.equal(period.typeLabel, '周报');
+});
+
+test('custom headers map to structured task facts without AI', () => {
+  const period = getPeriodRange('week', '2026-09-04');
+  const facts = buildReportFacts([{
+    id: 9,
+    title: '准备项目周会',
+    status: 'doing',
+    priority: 'high',
+    progress: 50,
+    requester: '项目经理',
+    owner: '小李',
+    collaborators: '研发组',
+    timeline: [{
+      progress: 60,
+      completed_work: '完成议题收集',
+      next_steps: '整理会议材料',
+      contacts: '产品负责人',
+      occurred_at: '2026-09-04T08:00:00.000Z',
+    }],
+  }], period);
+  const [row] = mapFactsLocally(facts, ['工作事项', '本周成果', '后续计划', '需沟通人员', '当前进度']);
+  assert.equal(row.工作事项, '准备项目周会');
+  assert.equal(row.本周成果, '完成议题收集');
+  assert.equal(row.后续计划, '整理会议材料');
+  assert.equal(row.需沟通人员, '产品负责人');
+  assert.equal(row.当前进度, 60);
 });
 
 test('report contains task facts, follow-ups and escaped HTML', () => {

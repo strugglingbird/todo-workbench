@@ -376,14 +376,15 @@ async function deleteSelectedTask() {
 
 async function generateReport(event) {
   event.preventDefault();
-  const useAi = $('#report-use-ai').checked;
+  const request = {
+    type: $('#report-type').value,
+    anchorDate: $('#report-anchor').value,
+    useAi: $('#report-use-ai').checked,
+  };
+  const useAi = request.useAi;
   showLoading(useAi ? '大模型正在整理汇报...' : '正在汇总任务记录...');
   try {
-    state.report = await api.reports.generate({
-      type: $('#report-type').value,
-      anchorDate: $('#report-anchor').value,
-      useAi,
-    });
+    state.report = { ...await api.reports.generate(request), request };
     $('#report-preview-title').textContent = state.report.period.title;
     $('#report-markdown').textContent = state.report.markdown;
     $('#report-markdown').hidden = false;
@@ -399,6 +400,10 @@ async function generateReport(event) {
 
 async function exportCurrentReport(format) {
   if (!state.report) return;
+  if (format === 'excel') {
+    await exportExcelReport();
+    return;
+  }
   showLoading(`正在导出 ${format.toUpperCase()}...`);
   try {
     const result = await api.reports.export({
@@ -407,6 +412,31 @@ async function exportCurrentReport(format) {
       format,
     });
     if (!result.canceled) toast(`汇报已导出到 ${result.filePath}`);
+  } catch (error) {
+    toast(readableError(error), 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function exportExcelReport() {
+  const templateId = $('#excel-template-select').value;
+  const template = state.settings?.excel?.templates.find((item) => item.id === templateId);
+  if (!template) {
+    toast('请先选择一个 Excel 表格模板。', 'error');
+    return;
+  }
+  showLoading(state.report.polished ? '大模型正在按表头匹配并生成 Excel...' : '正在生成 Excel 工作簿...');
+  try {
+    const result = await api.reports.exportExcel({
+      type: state.report.request.type,
+      anchorDate: state.report.request.anchorDate,
+      useAi: state.report.polished,
+      templateId,
+    });
+    if (!result.canceled) {
+      toast(`Excel 已导出：${result.rowCount} 行 × ${result.columnCount} 列`);
+    }
   } catch (error) {
     toast(readableError(error), 'error');
   } finally {
@@ -437,6 +467,104 @@ function aiFormValue() {
   };
 }
 
+function renderExcelTemplates() {
+  const excel = state.settings?.excel;
+  if (!excel) return;
+  const select = $('#excel-template-select');
+  select.innerHTML = excel.templates.map((template) => `
+    <option value="${escapeHtml(template.id)}">${escapeHtml(template.name)} · ${template.headers.length} 列</option>
+  `).join('');
+  select.value = excel.activeTemplateId;
+}
+
+function openExcelTemplateForm(createNew = false) {
+  const excel = state.settings?.excel;
+  const selectedId = $('#excel-template-select').value || excel?.activeTemplateId;
+  const template = createNew ? null : excel?.templates.find((item) => item.id === selectedId);
+  $('#excel-template-id').value = template?.id || '';
+  $('#excel-template-name').value = template?.name || '';
+  $('#excel-template-headers').value = template?.headers.join('\n') || '';
+  $('#excel-template-dialog-title').textContent = template ? '编辑表格模板' : '新建表格模板';
+  $('#delete-excel-template').hidden = !template;
+  if (!$('#excel-template-dialog').open) $('#excel-template-dialog').showModal();
+  setTimeout(() => $('#excel-template-name').focus(), 50);
+}
+
+function parseTemplateHeaders(value) {
+  return [...new Set(String(value).split(/[\n,，]/).map((item) => item.trim()).filter(Boolean))];
+}
+
+async function saveExcelTemplate(event) {
+  event.preventDefault();
+  const name = $('#excel-template-name').value.trim();
+  const headers = parseTemplateHeaders($('#excel-template-headers').value);
+  if (!name || !headers.length) {
+    toast('请填写模板名称和至少一个表头。', 'error');
+    return;
+  }
+  if (headers.length > 30) {
+    toast('一个模板最多支持 30 个表头。', 'error');
+    return;
+  }
+  const excel = state.settings.excel;
+  const currentId = $('#excel-template-id').value;
+  const id = currentId || `custom-${Date.now()}`;
+  const templates = currentId
+    ? excel.templates.map((item) => item.id === currentId ? { id, name, headers } : item)
+    : [...excel.templates, { id, name, headers }];
+  showLoading('正在保存 Excel 模板...');
+  try {
+    state.settings.excel = await api.settings.saveExcel({ activeTemplateId: id, templates });
+    renderExcelTemplates();
+    $('#excel-template-dialog').close();
+    toast('Excel 表格模板已保存');
+  } catch (error) {
+    toast(readableError(error), 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function deleteExcelTemplate() {
+  const excel = state.settings.excel;
+  const id = $('#excel-template-id').value;
+  const template = excel.templates.find((item) => item.id === id);
+  if (!template) return;
+  if (excel.templates.length <= 1) {
+    toast('至少需要保留一个 Excel 模板。', 'error');
+    return;
+  }
+  if (!window.confirm(`确定删除表格模板“${template.name}”吗？`)) return;
+  showLoading('正在删除 Excel 模板...');
+  try {
+    const templates = excel.templates.filter((item) => item.id !== id);
+    state.settings.excel = await api.settings.saveExcel({
+      activeTemplateId: templates[0].id,
+      templates,
+    });
+    renderExcelTemplates();
+    $('#excel-template-dialog').close();
+    toast('Excel 表格模板已删除');
+  } catch (error) {
+    toast(readableError(error), 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function selectExcelTemplate() {
+  const excel = state.settings?.excel;
+  if (!excel) return;
+  try {
+    state.settings.excel = await api.settings.saveExcel({
+      activeTemplateId: $('#excel-template-select').value,
+      templates: excel.templates,
+    });
+  } catch (error) {
+    toast(readableError(error), 'error');
+  }
+}
+
 function renderSettings() {
   const settings = state.settings;
   if (!settings) return;
@@ -457,6 +585,7 @@ function renderSettings() {
   $('#report-use-ai').disabled = !settings.ai.enabled;
   $('#ai-hint').textContent = settings.ai.enabled ? `使用 ${settings.ai.model}` : '需先在设置中启用';
   $('#storage-label').textContent = settings.database.type === 'mysql' ? 'MySQL 数据库' : '本地 SQLite';
+  renderExcelTemplates();
   toggleDatabaseFields();
 }
 
@@ -529,8 +658,13 @@ function bindEvents() {
   $('#progress-form').addEventListener('submit', saveProgress);
   $('#report-form').addEventListener('submit', generateReport);
   $('#settings-form').addEventListener('submit', saveSettings);
+  $('#excel-template-form').addEventListener('submit', saveExcelTemplate);
   $('#test-database').addEventListener('click', testDatabase);
   $('#test-ai').addEventListener('click', testModel);
+  $('#manage-excel-template').addEventListener('click', () => openExcelTemplateForm());
+  $('#new-excel-template').addEventListener('click', () => openExcelTemplateForm(true));
+  $('#delete-excel-template').addEventListener('click', deleteExcelTemplate);
+  $('#excel-template-select').addEventListener('change', selectExcelTemplate);
 
   $('#task-progress').addEventListener('input', (event) => {
     $('#task-progress-value').textContent = `${event.target.value}%`;

@@ -101,6 +101,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .button-primary { color: #fff; background: var(--coral); box-shadow: 0 8px 20px rgba(213, 80, 49, 0.18); }
 .button-primary:hover { background: var(--coral-dark); }
 .button-dark { color: #fff; background: var(--forest); }
+.button-excel { color: #fff; background: #277b57; }
+.button-excel:hover { background: #1f6848; }
 .button-ghost { border-color: var(--line); background: var(--card); }
 .button-ghost:hover { border-color: var(--sage); background: #fff; }
 .button-danger { color: var(--danger); border-color: rgba(185, 69, 62, 0.25); background: #fff8f5; }
@@ -205,6 +207,10 @@ input, textarea, select { border: 1px solid var(--line); border-radius: 9px; col
 input, select { height: 42px; padding: 0 12px; }
 textarea { padding: 11px 12px; resize: vertical; line-height: 1.6; }
 .report-control select, .report-control input { width: 100%; }
+.template-field { display: grid; gap: 7px; color: var(--ink-soft); font-size: 11px; font-weight: 700; }
+.template-field > small { color: #869692; font-size: 9px; font-weight: 400; }
+.template-picker { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+.template-picker .button { min-height: 42px; padding-inline: 13px; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; cursor: pointer; }
 .toggle-row span strong, .toggle-row span small { display: block; }
 .toggle-row span strong { color: var(--ink); font-size: 12px; }
@@ -268,6 +274,13 @@ dialog::backdrop { background: rgba(10, 36, 34, 0.58); backdrop-filter: blur(5px
 .range-field { display: grid; grid-template-columns: 1fr 48px; align-items: center; gap: 12px; }
 input[type="range"] { height: 6px; padding: 0; border: 0; accent-color: var(--coral); }
 .range-field output { color: var(--forest); font-family: Georgia, serif; font-size: 15px; text-align: right; }
+.template-form-grid { grid-template-columns: 1fr; }
+.template-form-grid small { color: #84938f; font-weight: 400; }
+.template-example { padding: 14px 15px; border-left: 3px solid var(--gold); border-radius: 8px; background: #f3f0e7; }
+.template-example strong { font-size: 11px; }
+.template-example p { margin: 5px 0 0; color: var(--ink-soft); font-size: 10px; line-height: 1.65; }
+.modal-footer-split { justify-content: space-between; }
+.modal-footer-split > div { display: flex; gap: 8px; }
 
 .detail-modal { width: min(900px, calc(100vw - 50px)); max-height: calc(100vh - 40px); overflow: auto; border-radius: 20px; background: var(--card); box-shadow: 0 32px 90px rgba(5, 28, 27, 0.32); }
 .detail-cover { position: relative; padding: 29px 32px 25px; color: #fff; background: var(--forest); }

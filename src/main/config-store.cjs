@@ -19,6 +19,21 @@ const DEFAULT_CONFIG = Object.freeze({
     model: 'gpt-4.1-mini',
     apiKeyEncrypted: '',
   },
+  excel: {
+    activeTemplateId: 'standard',
+    templates: [
+      {
+        id: 'standard',
+        name: '标准工作汇报',
+        headers: ['任务名称', '状态', '完成进度', '优先级', '需求人', '负责人', '本期完成内容', '下一步跟进', '待对接人员', '记录时间', '截止日期'],
+      },
+      {
+        id: 'follow-up',
+        name: '任务跟进清单',
+        headers: ['任务名称', '需求人', '当前进度', '下一步待办', '对接人', '计划完成时间', '风险与阻塞'],
+      },
+    ],
+  },
 });
 
 function cloneDefaults() {
@@ -47,6 +62,7 @@ class ConfigStore {
           mysql: { ...defaults.database.mysql, ...saved.database?.mysql },
         },
         ai: { ...defaults.ai, ...saved.ai },
+        excel: normalizeExcelConfig(saved.excel || defaults.excel),
       };
     } catch (error) {
       console.error('Unable to read config.json, using defaults.', error);
@@ -98,7 +114,12 @@ class ConfigStore {
         model: this.config.ai.model,
         hasApiKey: Boolean(this.config.ai.apiKeyEncrypted),
       },
+      excel: this.getExcelConfig(),
     };
+  }
+
+  getExcelConfig() {
+    return JSON.parse(JSON.stringify(normalizeExcelConfig(this.config.excel)));
   }
 
   getDatabaseConfig() {
@@ -166,10 +187,48 @@ class ConfigStore {
         model: String(aiInput.model || currentAi.model).trim(),
         apiKeyEncrypted,
       },
+      excel: input.excel
+        ? normalizeExcelConfig(input.excel)
+        : normalizeExcelConfig(this.config.excel),
     };
     this.#persist();
     return this.getPublic();
   }
+
+  saveExcelConfig(input) {
+    this.config.excel = normalizeExcelConfig(input);
+    this.#persist();
+    return this.getExcelConfig();
+  }
 }
 
-module.exports = { ConfigStore, DEFAULT_CONFIG };
+function normalizeExcelConfig(input = {}) {
+  const fallback = cloneDefaults().excel;
+  const seenIds = new Set();
+  const templates = (Array.isArray(input.templates) ? input.templates : fallback.templates)
+    .slice(0, 30)
+    .map((template, index) => {
+      const rawId = String(template?.id || `custom-${Date.now()}-${index}`);
+      let id = rawId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || `template-${index + 1}`;
+      while (seenIds.has(id)) id = `${id}-${index + 1}`;
+      seenIds.add(id);
+      const headers = [...new Set((Array.isArray(template?.headers) ? template.headers : [])
+        .map((header) => String(header || '').trim().slice(0, 60))
+        .filter(Boolean))]
+        .slice(0, 30);
+      if (!headers.length) return null;
+      return {
+        id,
+        name: String(template?.name || `自定义模板 ${index + 1}`).trim().slice(0, 80),
+        headers,
+      };
+    })
+    .filter(Boolean);
+  const safeTemplates = templates.length ? templates : fallback.templates;
+  const activeTemplateId = safeTemplates.some((template) => template.id === input.activeTemplateId)
+    ? input.activeTemplateId
+    : safeTemplates[0].id;
+  return { activeTemplateId, templates: safeTemplates };
+}
+
+module.exports = { ConfigStore, DEFAULT_CONFIG, normalizeExcelConfig };

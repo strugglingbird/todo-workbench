@@ -232,6 +232,115 @@ async function testAi(aiConfig) {
   return { ok: true, message: text.slice(0, 100) };
 }
 
+function buildReportFacts(tasks, period) {
+  return tasks.flatMap((task) => {
+    const entries = task.timeline?.length ? task.timeline : [null];
+    return entries.map((entry, sourceIndex) => ({
+      sourceIndex,
+      taskId: Number(task.id),
+      taskTitle: task.title || '',
+      status: task.status || '',
+      statusLabel: STATUS_LABELS[task.status] || task.status || '',
+      priority: task.priority || '',
+      priorityLabel: PRIORITY_LABELS[task.priority] || task.priority || '',
+      progress: Number(entry?.progress ?? task.progress ?? 0),
+      description: task.description || '',
+      requester: entry?.requester || task.requester || '',
+      owner: task.owner || '',
+      collaborators: task.collaborators || '',
+      completedWork: entry?.completed_work || '',
+      nextSteps: entry?.next_steps || '',
+      contacts: entry?.contacts || task.collaborators || '',
+      occurredAt: entry?.occurred_at || task.updated_at || '',
+      startDate: task.start_date || '',
+      dueDate: task.due_date || '',
+      completedAt: task.completed_at || '',
+      reportPeriod: `${period.startLabel} - ${period.endLabel}`,
+    }));
+  }).map((fact, index) => ({ ...fact, sourceIndex: index }));
+}
+
+function normalizedHeader(header) {
+  return String(header || '').toLowerCase().replace(/[\s_\-\/（）()]/g, '');
+}
+
+function localHeaderValue(header, fact) {
+  const key = normalizedHeader(header);
+  if (/任务(名称|标题)|事项(名称|标题)|工作事项|工作项|项目名称/.test(key)) return fact.taskTitle;
+  if (/本期完成|本周成果|本月成果|本季成果|年度成果|完成内容|工作进展|进展说明|阶段成果|已完成/.test(key)) return fact.completedWork;
+  if (/下一步|后续(计划|动作)|待办|待跟进|跟进事项/.test(key)) return fact.nextSteps;
+  if (/需求人|提出人|发起人|需求方/.test(key)) return fact.requester;
+  if (/负责人|责任人|执行人|经办人/.test(key)) return fact.owner;
+  if (/对接人|沟通人|联系人|待对接|协作人/.test(key)) return fact.contacts || fact.collaborators;
+  if (/完成进度|当前进度|任务进度|进度/.test(key)) return fact.progress;
+  if (/优先级|紧急程度/.test(key)) return fact.priorityLabel;
+  if (/状态|任务状态/.test(key)) return fact.statusLabel;
+  if (/风险|阻塞|问题/.test(key)) return fact.status === 'blocked' ? (fact.nextSteps || fact.description) : '';
+  if (/记录时间|填报时间|更新时间|进展时间/.test(key)) return fact.occurredAt;
+  if (/截止|计划完成|完成期限|交付日期/.test(key)) return fact.dueDate;
+  if (/实际完成|完成时间/.test(key)) return fact.completedAt;
+  if (/开始|启动日期/.test(key)) return fact.startDate;
+  if (/说明|描述|背景|任务内容/.test(key)) return fact.description;
+  if (/汇报周期|统计周期|周期/.test(key)) return fact.reportPeriod;
+  if (/任务编号|任务id|编号/.test(key)) return fact.taskId;
+  return '';
+}
+
+function mapFactsLocally(facts, headers) {
+  return facts.map((fact) => Object.fromEntries(
+    headers.map((header) => [header, localHeaderValue(header, fact)]),
+  ));
+}
+
+function preserveFactualValue(header) {
+  const key = normalizedHeader(header);
+  return /人员|人$|负责人|需求方|状态|进度|完成率|优先级|紧急程度|日期|时间|期限|周期|编号|id$/.test(key);
+}
+
+function parseAiJson(text) {
+  const cleaned = String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('模型未返回有效的表格 JSON。');
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    throw new Error('模型返回的表格 JSON 无法解析，请重试或关闭大模型匹配。');
+  }
+}
+
+async function mapFactsWithAi(aiConfig, facts, headers) {
+  const fallbackRows = mapFactsLocally(facts, headers);
+  const rows = [];
+  const chunkSize = 30;
+  for (let offset = 0; offset < facts.length; offset += chunkSize) {
+    const chunk = facts.slice(offset, offset + chunkSize);
+    const prompt = [
+      '把下面的任务事实转换为 Excel 表格行，并对叙述性内容做简洁、专业的中文润色。',
+      '规则：只能使用给定事实，不得补充或推测；人员、日期、状态、进度和数字必须原样保持；不适用或无法匹配的列使用空字符串。',
+      '每条事实必须输出且只输出一行，_source_index 必须与输入一致。输出列名必须与 headers 完全一致，不得增删或重命名。',
+      '仅返回 JSON，格式为 {"rows":[{"_source_index":0,"表头":"内容"}]}。',
+      `headers: ${JSON.stringify(headers)}`,
+      `facts: ${JSON.stringify(chunk)}`,
+    ].join('\n');
+    const payload = parseAiJson(await callAi(aiConfig, prompt));
+    const returned = Array.isArray(payload.rows) ? payload.rows : [];
+    const byIndex = new Map(returned.map((row) => [Number(row?._source_index), row]));
+    for (const fact of chunk) {
+      const aiRow = byIndex.get(fact.sourceIndex);
+      const fallback = fallbackRows[fact.sourceIndex];
+      rows.push(Object.fromEntries(headers.map((header) => {
+        const localValue = fallback[header];
+        const value = preserveFactualValue(header) && localValue !== ''
+          ? localValue
+          : aiRow && Object.hasOwn(aiRow, header) ? aiRow[header] : localValue;
+        return [header, value == null ? '' : value];
+      })));
+    }
+  }
+  return rows;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -290,5 +399,8 @@ module.exports = {
   buildReportMarkdown,
   polishReport,
   testAi,
+  buildReportFacts,
+  mapFactsLocally,
+  mapFactsWithAi,
   markdownToHtml,
 };

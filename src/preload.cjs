@@ -16,11 +16,13 @@ contextBridge.exposeInMainWorld('workbench', {
   reports: {
     generate: (input) => ipcRenderer.invoke('reports:generate', input),
     export: (input) => ipcRenderer.invoke('reports:export', input),
+    exportExcel: (input) => ipcRenderer.invoke('reports:export-excel', input),
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     testDatabase: (input) => ipcRenderer.invoke('settings:test-database', input),
     testAi: (input) => ipcRenderer.invoke('settings:test-ai', input),
+    saveExcel: (input) => ipcRenderer.invoke('settings:save-excel', input),
     save: (input) => ipcRenderer.invoke('settings:save', input),
   },
 });
