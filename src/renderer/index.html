@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none';">
+    <title>待办工作台</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+          <div><strong>待办工作台</strong><small>让进展有迹可循</small></div>
+        </div>
+
+        <nav class="nav-list" aria-label="主要导航">
+          <button class="nav-item active" data-view="dashboard">
+            <span class="nav-icon">⌂</span><span>工作概览</span>
+          </button>
+          <button class="nav-item" data-view="tasks">
+            <span class="nav-icon">✓</span><span>待办任务</span><b id="nav-task-count">0</b>
+          </button>
+          <button class="nav-item" data-view="reports">
+            <span class="nav-icon">▤</span><span>工作汇报</span>
+          </button>
+          <button class="nav-item" data-view="settings">
+            <span class="nav-icon">⚙</span><span>系统设置</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-note">
+          <span class="note-dot"></span>
+          <div><strong id="storage-label">本地 SQLite</strong><small>数据连接正常</small></div>
+        </div>
+        <div class="sidebar-footer">桌面版 <span id="app-version">v1.0.0</span></div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="today-label"></p>
+            <h1 id="view-title">工作概览</h1>
+            <p id="view-subtitle">聚焦今天，稳步推进每一件事。</p>
+          </div>
+          <button class="button button-primary" id="add-task-button"><span>＋</span> 新建任务</button>
+        </header>
+
+        <section class="view active" id="view-dashboard">
+          <div class="dashboard-hero">
+            <div class="hero-copy">
+              <span class="hero-kicker">TODAY'S FOCUS</span>
+              <h2 id="hero-greeting">把重要的事，一件件做好。</h2>
+              <p id="hero-summary">正在读取你的工作节奏...</p>
+              <button class="text-button" data-view-target="tasks">查看全部任务 <span>→</span></button>
+            </div>
+            <div class="hero-progress">
+              <div class="progress-orbit" id="overall-progress"><strong>0%</strong><span>平均进度</span></div>
+            </div>
+          </div>
+
+          <div class="stat-grid" id="stat-grid"></div>
+
+          <div class="dashboard-grid">
+            <article class="panel">
+              <div class="panel-heading"><div><span class="section-index">01</span><h2>近期动态</h2></div><span>最近 6 条</span></div>
+              <div class="activity-list" id="recent-activity"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-heading"><div><span class="section-index">02</span><h2>临近截止</h2></div><button class="icon-button" data-view-target="tasks" title="查看任务">→</button></div>
+              <div class="upcoming-list" id="upcoming-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-tasks">
+          <div class="toolbar panel-lite">
+            <label class="search-field"><span>⌕</span><input id="task-search" type="search" placeholder="搜索任务、需求人或负责人"></label>
+            <div class="filter-group" id="status-filter">
+              <button class="filter-chip active" data-status="all">全部</button>
+              <button class="filter-chip" data-status="todo">待开始</button>
+              <button class="filter-chip" data-status="doing">进行中</button>
+              <button class="filter-chip" data-status="blocked">受阻</button>
+              <button class="filter-chip" data-status="done">已完成</button>
+            </div>
+            <select id="priority-filter" aria-label="按优先级筛选">
+              <option value="all">全部优先级</option>
+              <option value="urgent">紧急</option>
+              <option value="high">高优先级</option>
+              <option value="medium">中优先级</option>
+              <option value="low">低优先级</option>
+            </select>
+          </div>
+          <div class="task-result-meta"><span id="task-result-count">0 个任务</span><span>点击任务查看完整处理流程</span></div>
+          <div class="task-grid" id="task-grid"></div>
+        </section>
+
+        <section class="view" id="view-reports">
+          <div class="report-layout">
+            <aside class="report-control panel">
+              <div class="section-intro"><span class="section-index">REPORT</span><h2>生成工作汇报</h2><p>从进度记录自动汇总，事实始终来自你的任务时间线。</p></div>
+              <form id="report-form">
+                <label>汇报周期<select id="report-type"><option value="week">周报</option><option value="month">月报</option><option value="quarter">季报</option><option value="year">年报</option></select></label>
+                <label>选择周期所在日期<input id="report-anchor" type="date" required></label>
+                <label class="toggle-row"><span><strong>大模型润色</strong><small id="ai-hint">需先在设置中启用</small></span><input id="report-use-ai" type="checkbox"><i></i></label>
+                <button class="button button-primary button-wide" type="submit">生成汇报</button>
+              </form>
+              <div class="report-tips"><strong>汇报会包含</strong><p>工作概览、任务进展、风险阻塞、下阶段跟进，以及需求人和对接人信息。</p></div>
+            </aside>
+
+            <article class="report-preview panel">
+              <div class="panel-heading">
+                <div><span class="section-index">PREVIEW</span><h2 id="report-preview-title">汇报预览</h2></div>
+                <div class="export-actions" id="export-actions" hidden>
+                  <button class="button button-ghost" data-export="md">Markdown</button>
+                  <button class="button button-ghost" data-export="html">HTML</button>
+                  <button class="button button-dark" data-export="pdf">导出 PDF</button>
+                </div>
+              </div>
+              <div class="report-empty" id="report-empty"><div class="document-illustration"><i></i><i></i><i></i></div><h3>选择周期，生成第一份汇报</h3><p>系统会自动整理该周期内的任务和进度填报。</p></div>
+              <pre class="markdown-preview" id="report-markdown" hidden></pre>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="view-settings">
+          <form id="settings-form" class="settings-layout">
+            <article class="panel settings-card">
+              <div class="settings-heading"><span class="settings-icon">↗</span><div><h2>启动与桌面</h2><p>控制应用随系统启动的行为。</p></div></div>
+              <label class="toggle-row setting-line"><span><strong>开机自动启动</strong><small>登录系统后自动打开待办工作台</small></span><input id="startup-setting" type="checkbox"><i></i></label>
+            </article>
+
+            <article class="panel settings-card settings-wide">
+              <div class="settings-heading"><span class="settings-icon">▦</span><div><h2>数据存储</h2><p>默认使用本地 SQLite，也可连接团队 MySQL。</p></div></div>
+              <div class="segmented" id="database-type">
+                <label><input type="radio" name="database-type" value="sqlite" checked><span>SQLite 本地数据库</span></label>
+                <label><input type="radio" name="database-type" value="mysql"><span>MySQL 数据库</span></label>
+              </div>
+              <div id="sqlite-fields" class="settings-fields single-field">
+                <label>SQLite 文件路径 <input id="sqlite-path" type="text" placeholder="留空则使用应用默认目录"><small>推荐留空，数据库将保存在系统应用数据目录。</small></label>
+              </div>
+              <div id="mysql-fields" class="settings-fields" hidden>
+                <label>主机地址<input id="mysql-host" type="text" placeholder="127.0.0.1"></label>
+                <label>端口<input id="mysql-port" type="number" min="1" max="65535" value="3306"></label>
+                <label>数据库名<input id="mysql-database" type="text" placeholder="todo_workbench"></label>
+                <label>用户名<input id="mysql-user" type="text" placeholder="root"></label>
+                <label class="field-wide">密码<input id="mysql-password" type="password" autocomplete="new-password" placeholder="留空则保留已保存密码"><small id="mysql-password-hint"></small></label>
+              </div>
+              <div class="settings-actions"><button class="button button-ghost" id="test-database" type="button">测试数据库连接</button><span id="database-test-result"></span></div>
+            </article>
+
+            <article class="panel settings-card settings-wide">
+              <div class="settings-heading"><span class="settings-icon">✦</span><div><h2>大模型扩展</h2><p>兼容 OpenAI Chat Completions 与 Responses API。</p></div></div>
+              <label class="toggle-row setting-line"><span><strong>启用大模型润色</strong><small>仅在你主动生成 AI 汇报时发送汇报文本</small></span><input id="ai-enabled" type="checkbox"><i></i></label>
+              <div class="settings-fields" id="ai-fields">
+                <label class="field-wide">API 地址<input id="ai-endpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions"></label>
+                <label>模型名称<input id="ai-model" type="text" placeholder="gpt-4.1-mini"></label>
+                <label>API Key<input id="ai-key" type="password" autocomplete="new-password" placeholder="留空则保留已保存密钥"><small id="ai-key-hint"></small></label>
+              </div>
+              <div class="settings-actions"><button class="button button-ghost" id="test-ai" type="button">测试模型连接</button><span id="ai-test-result"></span></div>
+            </article>
+
+            <div class="settings-savebar"><div><strong>配置保存在本机</strong><span id="data-path-label"></span></div><button class="button button-primary" type="submit">保存全部设置</button></div>
+          </form>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="task-dialog" class="modal">
+      <form id="task-form" method="dialog">
+        <div class="modal-header"><div><span class="section-index">TASK</span><h2 id="task-dialog-title">新建任务</h2></div><button class="modal-close" type="button" data-close-dialog="task-dialog">×</button></div>
+        <input id="task-id" type="hidden">
+        <div class="form-grid">
+          <label class="field-wide">任务标题<input id="task-title" type="text" maxlength="255" required placeholder="要完成什么事情？"></label>
+          <label>任务状态<select id="task-status"><option value="todo">待开始</option><option value="doing">进行中</option><option value="blocked">受阻</option><option value="done">已完成</option></select></label>
+          <label>优先级<select id="task-priority"><option value="medium">中</option><option value="low">低</option><option value="high">高</option><option value="urgent">紧急</option></select></label>
+          <label>需求人<input id="task-requester" type="text" placeholder="谁提出了这项需求？"></label>
+          <label>负责人<input id="task-owner" type="text" placeholder="由谁负责推进？"></label>
+          <label class="field-wide">协作 / 对接人<input id="task-collaborators" type="text" placeholder="多人可用逗号分隔"></label>
+          <label>开始日期<input id="task-start-date" type="date"></label>
+          <label>截止日期<input id="task-due-date" type="date"></label>
+          <label class="field-wide">当前进度<div class="range-field"><input id="task-progress" type="range" min="0" max="100" step="5" value="0"><output id="task-progress-value">0%</output></div></label>
+          <label class="field-wide">任务说明<textarea id="task-description" rows="4" placeholder="补充背景、目标或验收标准"></textarea></label>
+        </div>
+        <div class="modal-footer"><button class="button button-ghost" type="button" data-close-dialog="task-dialog">取消</button><button class="button button-primary" type="submit">保存任务</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="progress-dialog" class="modal">
+      <form id="progress-form" method="dialog">
+        <div class="modal-header"><div><span class="section-index">PROGRESS</span><h2>填报任务进度</h2><p id="progress-task-title"></p></div><button class="modal-close" type="button" data-close-dialog="progress-dialog">×</button></div>
+        <input id="progress-task-id" type="hidden">
+        <div class="form-grid">
+          <label class="field-wide">本次完成了什么？<textarea id="progress-completed" rows="4" required placeholder="具体描述本次完成的工作或取得的结果"></textarea></label>
+          <label>记录时间<input id="progress-time" type="datetime-local" required></label>
+          <label>完成进度<div class="range-field"><input id="progress-value" type="range" min="0" max="100" step="5"><output id="progress-value-label">0%</output></div></label>
+          <label>任务需求人<input id="progress-requester" type="text" placeholder="本次记录对应的需求人"></label>
+          <label>待对接 / 沟通人<input id="progress-contacts" type="text" placeholder="下一步需要和谁沟通？"></label>
+          <label class="field-wide">下一步待跟进<textarea id="progress-next" rows="3" placeholder="后续动作、依赖事项或需要解决的问题"></textarea></label>
+        </div>
+        <div class="modal-footer"><button class="button button-ghost" type="button" data-close-dialog="progress-dialog">取消</button><button class="button button-primary" type="submit">保存进度记录</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="detail-dialog" class="detail-modal">
+      <div id="task-detail"></div>
+    </dialog>
+
+    <div class="loading-overlay" id="loading-overlay" hidden><div class="loading-mark"><span></span><span></span><span></span></div><p id="loading-message">正在处理...</p></div>
+    <div class="toast-stack" id="toast-stack" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

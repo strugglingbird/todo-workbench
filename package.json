@@ -1,0 +1,55 @@
+{
+  "name": "todo-workbench",
+  "version": "1.0.1",
+  "description": "面向日常办公的桌面待办与工作汇报工具",
+  "main": "src/main/main.cjs",
+  "author": "Todo Workbench contributors",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check src/main/main.cjs && node --check src/main/database.cjs && node --check src/main/config-store.cjs && node --check src/main/reports.cjs && node --check src/preload.cjs && node --check src/renderer/app.js",
+    "smoke": "electron . --smoke-test",
+    "icon": "electron scripts/generate-icon.cjs",
+    "dist": "electron-builder --win nsis",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "mysql2": "^3.15.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.todo.workbench",
+    "productName": "待办工作台",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "README.md"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "待办工作台"
+    }
+  }
+}
